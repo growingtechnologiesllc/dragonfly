@@ -1165,6 +1165,45 @@ func (s *Session) ViewEntityAnimation(e world.Entity, a world.EntityAnimation) {
 	})
 }
 
+// OpenVirtualContainer opens a container UI of containerType (one of the
+// protocol.ContainerType* constants, e.g. protocol.ContainerTypeWorkbench or
+// protocol.ContainerTypeContainer) backed by inv, without requiring any real
+// world block to exist at pos - unlike OpenBlockContainer, which determines
+// its container type by inspecting the actual block there and refuses to do
+// anything if that block isn't a real container.
+//
+// pos still matters for two things: interaction-range/movement checks the
+// client itself makes against it (so it should be a real, nearby position,
+// even though nothing needs to actually be there), and as the key
+// closeCurrentContainer looks up on close - closing this virtual container
+// is a harmless no-op there beyond that lookup, since tx.Block(pos) won't
+// resolve to a block.Container/block.EnderChest unless pos happens to
+// genuinely hold one.
+//
+// This is a local patch (patches/dragonfly-virtual-container.patch) applied
+// on top of vanilla Dragonfly by the parent mcnetwork repo's
+// scripts/setup-dragonfly-patch.sh - see that repo's patches/README.md for
+// what it's for and why it exists.
+func (s *Session) OpenVirtualContainer(pos cube.Pos, tx *world.Tx, containerType byte, inv *inventory.Inventory) {
+	if s.containerOpened.Load() && *s.openedPos.Load() == pos {
+		return
+	}
+	s.closeCurrentContainer(tx, false)
+
+	nextID := s.nextWindowID()
+	s.containerOpened.Store(true)
+	s.openedWindow.Store(inv)
+	s.openedPos.Store(&pos)
+	s.openedContainerID.Store(uint32(containerType))
+	s.writePacket(&packet.ContainerOpen{
+		WindowID:                nextID,
+		ContainerType:           containerType,
+		ContainerPosition:       protocol.BlockPos{int32(pos[0]), int32(pos[1]), int32(pos[2])},
+		ContainerEntityUniqueID: -1,
+	})
+	s.sendInv(inv, uint32(nextID))
+}
+
 // OpenBlockContainer ...
 func (s *Session) OpenBlockContainer(pos cube.Pos, tx *world.Tx) {
 	if s.containerOpened.Load() && *s.openedPos.Load() == pos {

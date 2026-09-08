@@ -2603,6 +2603,21 @@ func (p *Player) OpenBlockContainer(pos cube.Pos, tx *world.Tx) {
 	}
 }
 
+// OpenVirtualContainer opens a container UI of containerType (one of the
+// protocol.ContainerType* constants from
+// github.com/sandertv/gophertunnel/minecraft/protocol) backed by inv, at pos
+// - without requiring any real world block to exist there. Local patch
+// (patches/dragonfly-virtual-container.patch) applied by the parent
+// mcnetwork repo's scripts/setup-dragonfly-patch.sh - see that repo's
+// patches/README.md.
+// OpenVirtualContainer does nothing if the player has no session connected
+// to it.
+func (p *Player) OpenVirtualContainer(pos cube.Pos, tx *world.Tx, containerType byte, inv *inventory.Inventory) {
+	if p.session() != session.Nop {
+		p.session().OpenVirtualContainer(pos, tx, containerType, inv)
+	}
+}
+
 // HideEntity hides a world.Entity from the Player so that it can under no circumstance see it. Hidden entities can be
 // made visible again through a call to ShowEntity.
 func (p *Player) HideEntity(e world.Entity) {
