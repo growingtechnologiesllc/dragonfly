@@ -77,10 +77,16 @@ type Session struct {
 	openedContainerID              atomic.Uint32
 	openedWindow                   atomic.Pointer[inventory.Inventory]
 	openedPos                      atomic.Pointer[cube.Pos]
-	swingingArm                    atomic.Bool
-	changingSlot                   atomic.Bool
-	changingDimension              atomic.Bool
-	moving                         bool
+	// virtualContainerActor is the EntityUniqueID of a temporary,
+	// invisible, this-session-only entity backing a currently open
+	// OpenVirtualEntityContainer, or 0 if none is open - despawned (to this
+	// session only) by closeCurrentContainer. Local patch - see
+	// OpenVirtualEntityContainer's own doc comment.
+	virtualContainerActor atomic.Int64
+	swingingArm           atomic.Bool
+	changingSlot          atomic.Bool
+	changingDimension     atomic.Bool
+	moving                bool
 
 	lastChunkPos world.ChunkPos
 

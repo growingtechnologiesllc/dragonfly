@@ -1180,10 +1180,10 @@ func (s *Session) ViewEntityAnimation(e world.Entity, a world.EntityAnimation) {
 // resolve to a block.Container/block.EnderChest unless pos happens to
 // genuinely hold one.
 //
-// This is a local patch (patches/dragonfly-virtual-container.patch) applied
-// on top of vanilla Dragonfly by the parent mcnetwork repo's
-// scripts/setup-dragonfly-patch.sh - see that repo's patches/README.md for
-// what it's for and why it exists.
+// This is a local patch on top of vanilla Dragonfly, maintained on the
+// nexi-patches branch of growingtechnologiesllc/dragonfly (a fork of this
+// repo) - see mcnetwork's go.mod replace directive and
+// internal/class/civilian.go for what uses it and why.
 func (s *Session) OpenVirtualContainer(pos cube.Pos, tx *world.Tx, containerType byte, inv *inventory.Inventory) {
 	if s.containerOpened.Load() && *s.openedPos.Load() == pos {
 		return
@@ -1200,6 +1200,63 @@ func (s *Session) OpenVirtualContainer(pos cube.Pos, tx *world.Tx, containerType
 		ContainerType:           containerType,
 		ContainerPosition:       protocol.BlockPos{int32(pos[0]), int32(pos[1]), int32(pos[2])},
 		ContainerEntityUniqueID: -1,
+	})
+	s.sendInv(inv, uint32(nextID))
+}
+
+// OpenVirtualEntityContainer opens a container UI of containerType backed
+// by inv, linked to a temporary, invisible entity of type entityType (a
+// real Bedrock actor identifier, e.g. "minecraft:npc") at pos instead of to
+// any block position - unlike OpenVirtualContainer, nothing is visible to
+// this player either: the temporary entity is invisible
+// (EntityDataFlagInvisible) and sent only to this session (never added to
+// the real world, never broadcast to anyone else), and is despawned - to
+// this session only - the instant the container closes
+// (closeCurrentContainer).
+//
+// UNVERIFIED against a live client: Bedrock's ContainerOpen packet does
+// carry an entity-linked mode (ContainerEntityUniqueID) alongside its
+// block-position mode, and it's how vanilla content links a container to a
+// minecart chest/hopper, horse, or chest boat - but no vanilla content
+// links every ContainerType this way, and there's no known precedent for
+// linking a WORKBENCH (crafting table) screen to an entity specifically.
+// This may simply not work for that container type. If it doesn't,
+// OpenVirtualContainer (block-position based, proven working, just visible
+// to the acting player while open) is the fallback.
+func (s *Session) OpenVirtualEntityContainer(pos mgl64.Vec3, tx *world.Tx, entityType string, containerType byte, inv *inventory.Inventory) {
+	s.closeCurrentContainer(tx, false)
+
+	s.entityMutex.Lock()
+	s.currentEntityRuntimeID++
+	runtimeID := s.currentEntityRuntimeID
+	s.entityMutex.Unlock()
+
+	metadata := protocol.NewEntityMetadata()
+	metadata[protocol.EntityDataKeyWidth] = float32(0.01)
+	metadata[protocol.EntityDataKeyHeight] = float32(0.01)
+	metadata.SetFlag(protocol.EntityDataKeyFlags, protocol.EntityDataFlagInvisible)
+	metadata.SetFlag(protocol.EntityDataKeyFlags, protocol.EntityDataFlagNoAI)
+
+	s.writePacket(&packet.AddActor{
+		EntityUniqueID:  int64(runtimeID),
+		EntityRuntimeID: runtimeID,
+		EntityType:      entityType,
+		EntityMetadata:  metadata,
+		Position:        vec64To32(pos),
+	})
+	s.virtualContainerActor.Store(int64(runtimeID))
+
+	blockPos := cube.PosFromVec3(pos)
+	nextID := s.nextWindowID()
+	s.containerOpened.Store(true)
+	s.openedWindow.Store(inv)
+	s.openedPos.Store(&blockPos)
+	s.openedContainerID.Store(uint32(containerType))
+	s.writePacket(&packet.ContainerOpen{
+		WindowID:                nextID,
+		ContainerType:           containerType,
+		ContainerPosition:       protocol.BlockPos{int32(blockPos[0]), int32(blockPos[1]), int32(blockPos[2])},
+		ContainerEntityUniqueID: int64(runtimeID),
 	})
 	s.sendInv(inv, uint32(nextID))
 }

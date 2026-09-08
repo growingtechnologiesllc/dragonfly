@@ -2606,15 +2606,27 @@ func (p *Player) OpenBlockContainer(pos cube.Pos, tx *world.Tx) {
 // OpenVirtualContainer opens a container UI of containerType (one of the
 // protocol.ContainerType* constants from
 // github.com/sandertv/gophertunnel/minecraft/protocol) backed by inv, at pos
-// - without requiring any real world block to exist there. Local patch
-// (patches/dragonfly-virtual-container.patch) applied by the parent
-// mcnetwork repo's scripts/setup-dragonfly-patch.sh - see that repo's
-// patches/README.md.
+// - without requiring any real world block to exist there. Local patch,
+// maintained on this fork's nexi-patches branch.
 // OpenVirtualContainer does nothing if the player has no session connected
 // to it.
 func (p *Player) OpenVirtualContainer(pos cube.Pos, tx *world.Tx, containerType byte, inv *inventory.Inventory) {
 	if p.session() != session.Nop {
 		p.session().OpenVirtualContainer(pos, tx, containerType, inv)
+	}
+}
+
+// OpenVirtualEntityContainer opens a container UI of containerType backed
+// by inv, linked to a temporary invisible entity of type entityType at pos
+// instead of any block position - unlike OpenVirtualContainer, not even
+// visible to p themselves. Local patch: see
+// Session.OpenVirtualEntityContainer's doc comment, including the
+// unverified-for-every-ContainerType caveat.
+// OpenVirtualEntityContainer does nothing if the player has no session
+// connected to it.
+func (p *Player) OpenVirtualEntityContainer(pos mgl64.Vec3, tx *world.Tx, entityType string, containerType byte, inv *inventory.Inventory) {
+	if p.session() != session.Nop {
+		p.session().OpenVirtualEntityContainer(pos, tx, entityType, containerType, inv)
 	}
 }
 

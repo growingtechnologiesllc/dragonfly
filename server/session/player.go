@@ -70,6 +70,12 @@ func (s *Session) closeCurrentContainer(tx *world.Tx, clientRequested bool) {
 	if !s.closeWindow(clientRequested) {
 		return
 	}
+	// Local patch: despawn OpenVirtualEntityContainer's temporary, this
+	// -session-only entity, if one is currently backing the container just
+	// closed - see that method's own doc comment.
+	if id := s.virtualContainerActor.Swap(0); id != 0 {
+		s.writePacket(&packet.RemoveActor{EntityUniqueID: id})
+	}
 
 	pos := *s.openedPos.Load()
 	b := tx.Block(pos)
