@@ -165,14 +165,26 @@ func (h *ItemStackRequestHandler) handleCreativeCraft(a *protocol.CraftCreativeS
 }
 
 // craftingSize gets the crafting size based on the opened container ID.
+//
+// This always returns the large (9-slot) size now, on both a real/virtual
+// Workbench window (openedContainerID == 1) and the plain inventory
+// screen's own embedded grid (no container ever opens for that one -
+// craftingOffset still tells the two apart by base offset). Recipe
+// consumption (handleCraft/handleAutoCraft/tryDynamicCraft) only checks
+// that the expected items exist somewhere in [offset, offset+size) - never
+// their exact position - so widening this doesn't touch how 4-slot
+// recipes already worked, it just stops capping every recipe that needs
+// more than 4 ingredients to only the real Workbench screen.
 func (s *Session) craftingSize() uint32 {
-	if s.openedContainerID.Load() == 1 {
-		return craftingGridSizeLarge
-	}
-	return craftingGridSizeSmall
+	return craftingGridSizeLarge
 }
 
 // craftingOffset gets the crafting offset based on the opened container ID.
+//
+// Each crafting-grid *context* keeps its own base offset - 28 for the
+// plain inventory's embedded grid, 32 for a real/virtual Workbench window -
+// exactly as before; craftingSize is what changed to have both serve 9
+// slots from their existing base rather than one of them being capped at 4.
 func (s *Session) craftingOffset() uint32 {
 	if s.openedContainerID.Load() == 1 {
 		return craftingGridLargeOffset
