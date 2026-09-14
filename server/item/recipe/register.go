@@ -26,6 +26,23 @@ func Recipes() []Recipe {
 	return slices.Clone(recipes)
 }
 
+// Filter removes every registered recipe for which keep returns false, in
+// place - e.g. to cut vanilla's full recipe set down to a gamemode-specific
+// subset before any client ever sees it (Session.sendRecipes, and so the
+// recipe book/search UI it drives, sends whatever Recipes() returns at the
+// time a player joins). Call it once at startup, after every recipe that
+// should be considered - including a vendored vanilla set from
+// registerVanilla and any custom recipes from Register - has already been
+// registered, and before the first player connects.
+//
+// This only touches the list Recipes() reads from; the separate index
+// Register builds for Potion/PotionContainerChange lookups (used by Perform,
+// not by the recipe book) is untouched, so filtering out a potion recipe
+// here doesn't stop it from still working at a brewing stand.
+func Filter(keep func(Recipe) bool) {
+	recipes = slices.DeleteFunc(recipes, func(r Recipe) bool { return !keep(r) })
+}
+
 // DynamicRecipes returns each dynamic recipe in a slice.
 func DynamicRecipes() []DynamicRecipe {
 	return slices.Clone(dynamicRecipes)

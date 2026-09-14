@@ -1184,6 +1184,12 @@ func (s *Session) ViewEntityAnimation(e world.Entity, a world.EntityAnimation) {
 // nexi-patches branch of growingtechnologiesllc/dragonfly (a fork of this
 // repo) - see mcnetwork's go.mod replace directive and
 // internal/class/civilian.go for what uses it and why.
+//
+// It deliberately skips sending inv's content to the client
+// (Session.sendInv) for a clientManagedContainerType - see that function's
+// own doc comment for why: an earlier version always sent it, which matches
+// a live-tested symptom of a Workbench-type container opening and then
+// instantly closing again on its own.
 func (s *Session) OpenVirtualContainer(pos cube.Pos, tx *world.Tx, containerType byte, inv *inventory.Inventory) {
 	if s.containerOpened.Load() && *s.openedPos.Load() == pos {
 		return
@@ -1201,7 +1207,27 @@ func (s *Session) OpenVirtualContainer(pos cube.Pos, tx *world.Tx, containerType
 		ContainerPosition:       protocol.BlockPos{int32(pos[0]), int32(pos[1]), int32(pos[2])},
 		ContainerEntityUniqueID: -1,
 	})
-	s.sendInv(inv, uint32(nextID))
+	if !clientManagedContainerType(containerType) {
+		s.sendInv(inv, uint32(nextID))
+	}
+}
+
+// clientManagedContainerType reports whether containerType is one of the
+// "special kind of window" types OpenBlockContainer itself never sends an
+// InventoryContent packet for (see its own comment by that name) - Workbench,
+// Enchantment, Anvil, Beacon, Lectern, Loom, Grindstone, Stonecutter, and
+// SmithingTable. The client renders these UIs itself rather than displaying
+// server-backed slot content, so sending content for one anyway is, at
+// best, protocol noise the client wasn't expecting.
+func clientManagedContainerType(containerType byte) bool {
+	switch containerType {
+	case protocol.ContainerTypeWorkbench, protocol.ContainerTypeEnchantment, protocol.ContainerTypeAnvil,
+		protocol.ContainerTypeBeacon, protocol.ContainerTypeLectern, protocol.ContainerTypeLoom,
+		protocol.ContainerTypeGrindstone, protocol.ContainerTypeStonecutter, protocol.ContainerTypeSmithingTable:
+		return true
+	default:
+		return false
+	}
 }
 
 // OpenVirtualEntityContainer opens a container UI of containerType backed
