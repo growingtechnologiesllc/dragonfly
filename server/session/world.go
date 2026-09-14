@@ -1246,9 +1246,20 @@ func clientManagedContainerType(containerType byte) bool {
 // minecart chest/hopper, horse, or chest boat - but no vanilla content
 // links every ContainerType this way, and there's no known precedent for
 // linking a WORKBENCH (crafting table) screen to an entity specifically.
-// This may simply not work for that container type. If it doesn't,
-// OpenVirtualContainer (block-position based, proven working, just visible
-// to the acting player while open) is the fallback.
+//
+// A first live test of this (before the sendInv fix below existed) showed
+// the same "opens then instantly closes" symptom OpenVirtualContainer had -
+// but growingtechnologiesllc/mcnetwork's own separate live test of
+// OpenVirtualContainer (after that fix) found a different, more fundamental
+// cause for a Workbench specifically: the client validates that a real
+// crafting-table block actually exists at ContainerPosition and closes the
+// container itself if it doesn't - something no world-position-based
+// method, however careful about packet content, can ever satisfy for a
+// container that was never really placed. Linking to an entity instead of a
+// position is likely what actually avoids that check (matching how a real
+// minecart chest is a moving, position-independent container in vanilla
+// too) - still unconfirmed against a live client for Workbench specifically,
+// but a materially different bet than the first test made.
 func (s *Session) OpenVirtualEntityContainer(pos mgl64.Vec3, tx *world.Tx, entityType string, containerType byte, inv *inventory.Inventory) {
 	s.closeCurrentContainer(tx, false)
 
@@ -1284,7 +1295,9 @@ func (s *Session) OpenVirtualEntityContainer(pos mgl64.Vec3, tx *world.Tx, entit
 		ContainerPosition:       protocol.BlockPos{int32(blockPos[0]), int32(blockPos[1]), int32(blockPos[2])},
 		ContainerEntityUniqueID: int64(runtimeID),
 	})
-	s.sendInv(inv, uint32(nextID))
+	if !clientManagedContainerType(containerType) {
+		s.sendInv(inv, uint32(nextID))
+	}
 }
 
 // OpenBlockContainer ...
